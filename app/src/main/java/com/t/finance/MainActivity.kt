@@ -65,11 +65,16 @@ fun HisseHesaplamaApp() {
     var ekToplam by rememberSaveable { mutableStateOf(0.0) }
 
     var genelToplam by rememberSaveable { mutableStateOf(0.0) }
+    var ortalamaMaliyet by rememberSaveable { mutableStateOf(0.0) }
+    var toplamHisseAdeti by rememberSaveable { mutableStateOf(0) }
+
     val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp).verticalScroll(scrollState),
+            .padding(16.dp)
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
@@ -177,7 +182,18 @@ fun HisseHesaplamaApp() {
         // Hesaplama butonu ve sonuç
         Button(
             onClick = {
+                val ilkAdet = ilkHisseAdeti.toIntOrNull() ?: 0
+                val ekAdet = ekHisseAdeti.toIntOrNull() ?: 0
+
                 genelToplam = ilkToplam + ekToplam
+                toplamHisseAdeti = ilkAdet + ekAdet
+
+                // Ortalama maliyet hesaplama
+                ortalamaMaliyet = if (toplamHisseAdeti > 0) {
+                    genelToplam / toplamHisseAdeti
+                } else {
+                    0.0
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -186,7 +202,7 @@ fun HisseHesaplamaApp() {
             Text("HESAPLA")
         }
 
-        // Genel toplam
+        // Genel toplam ve ortalama maliyet
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -197,18 +213,38 @@ fun HisseHesaplamaApp() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "GENEL TOPLAM",
+                    text = "SONUÇLAR",
                     style = MaterialTheme.typography.titleMedium
                 )
 
                 Text(
-                    text = "${String.format("%.2f", genelToplam)} TL",
+                    text = "Genel Toplam: ${String.format("%.2f", genelToplam)} TL",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Ortalama Maliyet: ${String.format("%.2f", ortalamaMaliyet)} TL",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Toplam Hisse Adeti: $toplamHisseAdeti",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
+
+        // Klavye açıldığında içerik yukarı kaydırılabilsin diye ek bir boşluk
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
