@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.t.finance.ui.theme.FinanceTheme
 import kotlin.math.abs
+import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,17 +71,26 @@ fun HisseHesaplamaApp() {
     var ortalamaMaliyet by rememberSaveable { mutableStateOf(0.0) }
     var toplamHisseAdeti by rememberSaveable { mutableStateOf(0) }
 
-    // Yeni Kar/Zarar hesaplama için değişkenler
+    // Kar/Zarar hesaplama için değişkenler
     var eskiFiyat by rememberSaveable { mutableStateOf("") }
     var yeniFiyat by rememberSaveable { mutableStateOf("") }
-    var karZararHisseAdeti by rememberSaveable { mutableStateOf("") } // Yeni eklenen hisse adeti değişkeni
+    var karZararHisseAdeti by rememberSaveable { mutableStateOf("") }
     var yuzdelikDegisim by rememberSaveable { mutableStateOf(0.0) }
     var toplamMaliyet by rememberSaveable { mutableStateOf("") }
-    var hesaplananToplamMaliyet by rememberSaveable { mutableStateOf(0.0) } // Hesaplanan toplam maliyet
+    var hesaplananToplamMaliyet by rememberSaveable { mutableStateOf(0.0) }
     var karZarar by rememberSaveable { mutableStateOf(0.0) }
     var karZararYuzde by rememberSaveable { mutableStateOf(0.0) }
 
+    // Yeni Faiz Hesaplama için değişkenler
+    var faizOrani by rememberSaveable { mutableStateOf("") }
+    var yatirilacakPara by rememberSaveable { mutableStateOf("") }
+    var gunSayisi by rememberSaveable { mutableStateOf("") }
+    var faizGetirisi by rememberSaveable { mutableStateOf(0.0) }
+    var netFaizGetirisi by rememberSaveable { mutableStateOf(0.0) }
+    var toplamPara by rememberSaveable { mutableStateOf(0.0) }
+
     val scrollState = rememberScrollState()
+    val stopajOrani = 0.15
 
     Column(
         modifier = Modifier
@@ -90,7 +100,7 @@ fun HisseHesaplamaApp() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Hisse Hesaplama Uygulaması",
+            text = "Finans Hesaplama Uygulaması",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -255,7 +265,7 @@ fun HisseHesaplamaApp() {
             }
         }
 
-        // YENİ KAR/ZARAR HESAPLAMA BÖLÜMÜ
+        // KAR/ZARAR HESAPLAMA BÖLÜMÜ
         Card(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -307,7 +317,7 @@ fun HisseHesaplamaApp() {
                     )
                 }
 
-                // Yeni hisse adeti girişi
+                // Hisse adeti girişi
                 OutlinedTextField(
                     value = karZararHisseAdeti,
                     onValueChange = {
@@ -335,16 +345,6 @@ fun HisseHesaplamaApp() {
 
                 Text(
                     text = "Fiyat Değişimi: $yuzdeIsareti${String.format("%.2f", yuzdelikDegisim)}%",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = yuzdeRenk,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = "Hesaplanan: ${String.format("%.2f", hesaplananToplamMaliyet)} TL",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = yuzdeRenk,
@@ -425,6 +425,151 @@ fun HisseHesaplamaApp() {
                         )
                     }
                 }
+            }
+        }
+
+        // YENİ FAİZ HESAPLAMA BÖLÜMÜ
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Faiz Hesaplama",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                // Faiz Oranı Girişi
+                OutlinedTextField(
+                    value = faizOrani,
+                    onValueChange = { faizOrani = it },
+                    label = { Text("Yıllık Faiz Oranı (%)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Yatırılacak Para Girişi
+                OutlinedTextField(
+                    value = yatirilacakPara,
+                    onValueChange = { yatirilacakPara = it },
+                    label = { Text("Yatırılacak Para (TL)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Gün Sayısı Girişi
+                OutlinedTextField(
+                    value = gunSayisi,
+                    onValueChange = {
+                        // Maksimum 365 gün sınırı
+                        val gun = it.toIntOrNull() ?: 0
+                        if (it.isEmpty() || gun <= 365) {
+                            gunSayisi = it
+                        }
+                    },
+                    label = { Text("Vade Süresi (Gün) - Maksimum 365") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Faiz Hesaplama Butonu
+                Button(
+                    onClick = {
+                        val yillikFaizOrani = faizOrani.toDoubleOrNull() ?: 0.0
+                        val anapara = yatirilacakPara.toDoubleOrNull() ?: 0.0
+                        val gun = gunSayisi.toIntOrNull() ?: 0
+
+                        // Faiz hesaplama formülü: Anapara * (Faiz Oranı / 100) * (Gün / 365)
+                        val gunlukFaizTutari = anapara * (yillikFaizOrani / 100.0) * (min(gun, 365) / 365.0)
+
+                        // Stopaj vergisi hesaplama
+                        val stopajVergisi = gunlukFaizTutari * stopajOrani
+
+                        // Net faiz tutarı (stopaj vergisi düşülmüş)
+                        val netFaizTutari = gunlukFaizTutari - stopajVergisi
+
+
+                        faizGetirisi = gunlukFaizTutari
+                        netFaizGetirisi = netFaizTutari
+                        toplamPara = anapara + netFaizTutari
+
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text("FAİZ HESAPLA")
+                }
+
+                // Faiz Hesaplama Sonuçları
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "FAİZ GETİRİSİ",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${String.format("%.2f", faizGetirisi)} TL",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "NET FAİZ GETİRİSİ",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${String.format("%.2f", netFaizGetirisi)} TL",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "VADE SONU TOPLAM",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${String.format("%.2f", toplamPara)} TL",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+
+                // Faiz hesaplama açıklaması
+                Text(
+                    text = "Not: Bu hesaplamada basit faiz formülü kullanılmıştır. Bankalar farklı faiz hesaplama yöntemleri kullanabilir.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
 
